@@ -1,28 +1,45 @@
 const fs = require("fs");
 const path = require("path");
 
-const root = process.cwd();
+const ROOT = path.resolve(__dirname, "..");
 
-const stories = [];
+function isStoryDir(dir) {
+  return fs.statSync(dir).isDirectory() &&
+         !dir.includes(".git") &&
+         !dir.includes("scripts");
+}
 
-fs.readdirSync(root, { withFileTypes: true }).forEach(dir => {
-  if (!dir.isDirectory()) return;
+const dirs = fs.readdirSync(ROOT)
+  .map(name => path.join(ROOT, name))
+  .filter(isStoryDir);
 
-  const infoPath = path.join(root, dir.name, "info.json");
-  if (!fs.existsSync(infoPath)) return;
+dirs.forEach(storyPath => {
+  const slug = path.basename(storyPath);
 
-  try {
-    const info = JSON.parse(fs.readFileSync(infoPath, "utf8"));
-    stories.push(info);
-  } catch (e) {
-    console.error("Lỗi info.json:", dir.name);
-  }
+  const files = fs.readdirSync(storyPath)
+    .filter(f => f.endsWith(".md") && f.startsWith("chuong-"));
+
+  if (!files.length) return;
+
+  const chapters = files.map(f => {
+    const m = f.match(/(\d+)/);
+    if (!m) return null;
+    const num = parseInt(m[1], 10);
+    return { number: num, title: `Chương ${num}` };
+  }).filter(Boolean)
+    .sort((a, b) => a.number - b.number);
+
+  const index = {
+    story: slug.replace(/-/g, " "),
+    slug,
+    chapters
+  };
+
+  fs.writeFileSync(
+    path.join(storyPath, "index.json"),
+    JSON.stringify(index, null, 2),
+    "utf-8"
+  );
+
+  console.log(`✅ Updated index.json for ${slug}`);
 });
-
-fs.writeFileSync(
-  "index.json",
-  JSON.stringify(stories, null, 2),
-  "utf8"
-);
-
-console.log("✅ index.json updated:", stories.length, "truyện");
